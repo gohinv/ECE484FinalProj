@@ -4,6 +4,7 @@ import numpy as np
 import cv2
 import rospy
 import PIL
+import PIL.Image
 
 from line_fit import line_fit, tune_fit, bird_fit, final_viz
 from Line import Line
@@ -107,7 +108,7 @@ class lanenet_detector():
         s_channel = hls[:, :, 2]  # get saturation 
         l_channel = hls[:, :, 1]  # get lightness
         h_channel = hls[:, :, 0]  # get hue
-        binary_output = np.where((h_channel < 40) & ((s_channel > thresh[0]) | (l_channel > 179)), 1, 0) # uncomment for GEM, bag 0011, 0056
+        binary_output = np.where((h_channel < 40) & ((s_channel > thresh[0])), 1, 0) # uncomment for GEM, bag 0011, 0056
         # binary_output = np.where(((h_channel < 35) & (s_channel > 50)) | (l_channel > 150), 1, 0) # uncomment for bag 0830
         
         ####
@@ -149,10 +150,10 @@ class lanenet_detector():
         ## TODO
         #1. Visually determine 4 source points and 4 destination points
 
-        # int_list = img.astype(np.uint8)
-        # im = PIL.Image.fromarray(int_list * 255)
-        # im = im.convert("L")
-        # im.save("pre_warp.jpeg")
+        int_list = img.astype(np.uint8)
+        im = PIL.Image.fromarray(int_list * 255)
+        im = im.convert("L")
+        im.save("pre_warp.jpeg")
 
         src = np.float32([[265, 266], [375, 266], [633, 420], [0, 420]]) # uncomment for GEM
         dest = np.float32([[100, 0], [564, 0], [555, 479], [110, 479]])   # uncomment for GEM
@@ -168,10 +169,10 @@ class lanenet_detector():
         #3. Generate warped image in bird view using cv2.warpPerspective()
         warped_img = cv2.warpPerspective(np.uint8(img), M, (640, 480))
 
-        # im = PIL.Image.fromarray(warped_img * 255)
-        # im = im.convert("L")
-        # im.save("post_warp.jpeg")
-        # breakpoint()
+        im = PIL.Image.fromarray(warped_img * 255)
+        im = im.convert("L")
+        im.save("post_warp.jpeg")
+        breakpoint()
  
         return warped_img, M, Minv
 
