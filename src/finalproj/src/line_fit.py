@@ -36,7 +36,7 @@ def line_fit(binary_warped):
 	leftx_current = leftx_base
 	rightx_current = rightx_base
 	# Set the width of the windows +/- margin
-	margin = 50
+	margin = 20
 	# Set minimum number of pixels found to recenter window
 	minpix = 50
 	# Create empty lists to receive left and right lane pixel indices
@@ -57,6 +57,12 @@ def line_fit(binary_warped):
 		##TO DO
 		cv2.rectangle(out_img, tl_left, br_left, (0, 255, 0), thickness=-1)
 		cv2.rectangle(out_img, tl_right, br_right, (0, 0, 255), thickness=-1)
+
+		# Draw the error line
+		cv2.circle(out_img, (320, 240), 5, (0, 255, 0), thickness=-1) # midpoint of image
+		cv2.circle(out_img, ((tl_left[0] + br_right[0]) // 2, 240), 5, (0, 0, 255), thickness=-1) # midpoint of lanes
+		cv2.line(out_img, (320, 240), ((tl_left[0] + br_right[0]) // 2, 240), (255, 0, 0), thickness=2) # line connecting midpoints
+		err = ((tl_left[0] + br_right[0]) // 2) - 320
 		####
 		# Identify the nonzero pixels in x and y within the window
 		##TO DO
@@ -122,6 +128,7 @@ def line_fit(binary_warped):
 	ret['out_img'] = out_img
 	ret['left_lane_inds'] = left_lane_inds
 	ret['right_lane_inds'] = right_lane_inds
+	ret['err'] = err
 
 	return ret
 
@@ -136,7 +143,7 @@ def tune_fit(binary_warped, left_fit, right_fit):
 	nonzero = binary_warped.nonzero()
 	nonzeroy = np.array(nonzero[0])
 	nonzerox = np.array(nonzero[1])
-	margin = 100
+	margin = 20
 	left_lane_inds = ((nonzerox > (left_fit[0]*(nonzeroy**2) + left_fit[1]*nonzeroy + left_fit[2] - margin)) & (nonzerox < (left_fit[0]*(nonzeroy**2) + left_fit[1]*nonzeroy + left_fit[2] + margin)))
 	right_lane_inds = ((nonzerox > (right_fit[0]*(nonzeroy**2) + right_fit[1]*nonzeroy + right_fit[2] - margin)) & (nonzerox < (right_fit[0]*(nonzeroy**2) + right_fit[1]*nonzeroy + right_fit[2] + margin)))
 
@@ -158,6 +165,7 @@ def tune_fit(binary_warped, left_fit, right_fit):
 	ploty = np.linspace(0, binary_warped.shape[0]-1, binary_warped.shape[0] )
 	left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
 	right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
+	err = ((left_fitx[0] + right_fitx[-1]) // 2) - 320
 
 	# Return a dict of relevant variables
 	ret = {}
@@ -167,6 +175,7 @@ def tune_fit(binary_warped, left_fit, right_fit):
 	ret['nonzeroy'] = nonzeroy
 	ret['left_lane_inds'] = left_lane_inds
 	ret['right_lane_inds'] = right_lane_inds
+	ret['err'] = err
 
 	return ret
 
@@ -234,7 +243,7 @@ def bird_fit(binary_warped, ret, save_file=None):
 
 	# Generate a polygon to illustrate the search window area
 	# And recast the x and y points into usable format for cv2.fillPoly()
-	margin = 100  # NOTE: Keep this in sync with *_fit()
+	margin = 20  # NOTE: Keep this in sync with *_fit()
 	left_line_window1 = np.array([np.transpose(np.vstack([left_fitx-margin, ploty]))])
 	left_line_window2 = np.array([np.flipud(np.transpose(np.vstack([left_fitx+margin, ploty])))])
 	left_line_pts = np.hstack((left_line_window1, left_line_window2))
@@ -245,6 +254,13 @@ def bird_fit(binary_warped, ret, save_file=None):
 	# Draw the lane onto the warped blank image
 	cv2.fillPoly(window_img, np.int_([left_line_pts]), (0,255, 0))
 	cv2.fillPoly(window_img, np.int_([right_line_pts]), (0,255, 0))
+	cv2.circle(out_img, (320, 240), 5, (0, 255, 0), thickness=-1) # midpoint of image
+	# get midpoint of lanes in x direction
+	tl_left = (int(left_fitx[0]), 0)
+	br_right = (int(right_fitx[-1]), 0)
+	cv2.circle(out_img, ((tl_left[0] + br_right[0]) // 2, 240), 5, (0, 0, 255), thickness=-1) # midpoint of lanes
+	cv2.line(out_img, (320, 240), ((tl_left[0] + br_right[0]) // 2, 240), (255, 0, 0), thickness=2) # line connecting midpoints
+	err = ((tl_left[0] + br_right[0]) // 2) - 320
 	result = cv2.addWeighted(out_img, 1, window_img, 0.3, 0)
 
 	# plt.imshow(result)
