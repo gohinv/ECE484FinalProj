@@ -7,10 +7,9 @@ class PIDController:
     def __init__(self):
         rospy.init_node('pid_controller', anonymous=True)
         
-        # PID 
-        self.kp = 0.5  # Proportional gain
-        self.ki = 0.0  # Integral gain
-        self.kd = 0.1  # Derivative gain
+        self.kp = 0.5  # tune
+        self.ki = 0.0  # tune 
+        self.kd = 0.1  # tune
         
         # PID variables
         self.prev_error = 0.0
@@ -22,9 +21,9 @@ class PIDController:
         self.prev_time = rospy.Time.now()
         
         # Subscribe to the lane detection error from studentVision
-        rospy.Subscriber('lane_detection/error', Float32, self.error_callback)
+        rospy.Subscriber('lane_detection/error', Float32, self.error_callback) # sahej error publish topic
         
-        self.drive_pub = rospy.Publisher('/vesc/ackermann_cmd_mux/input/navigation', AckermannDriveStamped, queue_size=10)
+        self.drive_pub = rospy.Publisher('/vesc/ackermann_cmd_mux/input/navigation', AckermannDriveStamped, queue_size=10) # need to figure out the structure of this topic, does it just take steering angles?
         
         self.current_error = 0.0
         
@@ -38,7 +37,6 @@ class PIDController:
             current_time = rospy.Time.now()
             delta_time = (current_time - self.prev_time).to_sec()
             
-            # for division by zero
             if delta_time == 0:
                 delta_time = 0.0001
             
