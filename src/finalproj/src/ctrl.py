@@ -19,6 +19,11 @@ class PIDController:
         self.desired_speed = 1.0        #  speed (m/s)
         
         self.prev_time = rospy.Time.now()
+
+        #speeds (will need to tune hella) (in m/s)
+        self.max_velocity = 1.5 
+        self.mid_velocity = 1.0 
+        self.min_velocity = 0.5        
         
         # Subscribe to the lane detection error from studentVision
         rospy.Subscriber('lane_detection/error', Float32, self.error_callback) # sahej error publish topic
@@ -31,7 +36,15 @@ class PIDController:
     
     def error_callback(self, msg):
         self.current_error = msg.data
-        
+    
+    def get_velocity(self, steering_angle):
+        if abs(steering_angle) <= 0.1:
+            return self.max_velocity
+        elif abs(steering_angle) <= 0.2:
+            return self.mid_velocity
+        else:
+            return self.min_velocity
+
     def run(self):
         while not rospy.is_shutdown():
             current_time = rospy.Time.now()
