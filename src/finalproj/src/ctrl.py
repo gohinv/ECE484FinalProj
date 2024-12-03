@@ -1,29 +1,29 @@
-
 import rospy
+from std_msgs.msg import String, Bool, Float32, Float64, Float64MultiArray
 from ackermann_msgs.msg import AckermannDriveStamped
-from std_msgs.msg import Float32
 
 class PIDController:
     def __init__(self):
         rospy.init_node('pid_controller', anonymous=True)
         
-        self.kp = 0.5  # tune
-        self.ki = 0.0  # tune 
+        self.kp = 0.05  # tune
+        self.ki = 0.01  # tune 
         self.kd = 0.1  # tune
         
         # PID variables
         self.prev_error = 0.0
         self.integral = 0.0
         
-        self.max_steering_angle = 0.34  # max steering angle (in radians)
-        self.desired_speed = 1.0        #  speed (m/s)
+        self.max_steering_angle = 0.24  # max steering angle (in radians) add min
+
+        # self.desired_speed = 1.0        #  speed (m/s)
         
         self.prev_time = None
 
-        #speeds (will need to tune hella) (in m/s)
-        self.max_velocity = 1.5 
-        self.mid_velocity = 1.0 
-        self.min_velocity = 0.5        
+        # #speeds (will need to tune hella) (in m/s)
+        # self.max_velocity = 0.5 
+        # self.mid_velocity = 1.0 
+        # self.min_velocity = 0.5        
 
         # Subscribe to the lane detection error from studentVision
         rospy.Subscriber('lane_detection/error', Float32, self.error_callback) # sahej error publish topic
@@ -34,7 +34,7 @@ class PIDController:
         
         self.rate = rospy.Rate(50)  
     
-    def error_callback(self, msg):
+    def error_callback(self, msg): 
         self.current_error = msg.data
     
     def get_velocity(self, steering_angle):
@@ -70,7 +70,7 @@ class PIDController:
             drive_msg.header.stamp = current_time
             drive_msg.header.frame_id = "f1tenth_control"
             drive_msg.drive.steering_angle = steering_angle
-            drive_msg.drive.speed = self.desired_speed
+            drive_msg.drive.speed = 0.4
             
             self.drive_pub.publish(drive_msg)
             
