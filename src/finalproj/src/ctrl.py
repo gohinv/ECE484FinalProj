@@ -28,11 +28,11 @@ class PIDController:
         # Subscribe to the lane detection error from studentVision
         rospy.Subscriber('lane_detection/error', Float32, self.error_callback) # sahej error publish topic
         
-        self.drive_pub = rospy.Publisher('/vesc/ackermann_cmd_mux/input/navigation', AckermannDriveStamped, queue_size=10) # need to figure out the structure of this topic, does it just take steering angles?
+        self.drive_pub = rospy.Publisher("/vesc/low_level/ackermann_cmd_mux/input/navigation", AckermannDriveStamped, queue_size=1) # need to figure out the structure of this topic, does it just take steering angles?
         
         self.current_error = 0.0
         
-        self.rate = rospy.Rate(10)  
+        self.rate = rospy.Rate(50)  
     
     def error_callback(self, msg):
         self.current_error = msg.data
