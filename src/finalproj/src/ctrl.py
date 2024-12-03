@@ -68,7 +68,7 @@ class PIDController:
             # publish the drive message
             drive_msg = AckermannDriveStamped()
             drive_msg.header.stamp = current_time
-            drive_msg.header.frame_id = "base_link"
+            drive_msg.header.frame_id = "f1tenth_control"
             drive_msg.drive.steering_angle = steering_angle
             drive_msg.drive.speed = self.desired_speed
             
