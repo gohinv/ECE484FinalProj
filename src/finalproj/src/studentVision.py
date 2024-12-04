@@ -184,7 +184,7 @@ class lanenet_detector():
 
         binary_img = self.combinedBinaryImage(img)
         img_birdeye, M, Minv = self.perspective_transform(binary_img)
-        err = 0
+        err = float("inf")
         if not self.hist:
             # Fit lane without previous result
             ret = line_fit(img_birdeye)
