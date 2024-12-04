@@ -33,6 +33,9 @@ class StopSignDetector:
 
 if __name__ == '__main__':
     rospy.init_node('stop_sign_detector', anonymous=True)
+
+
+    # creates the model and continues running; callbacks will allow for functionality.
     detector = StopSignDetector()
     try:
         rospy.spin()
