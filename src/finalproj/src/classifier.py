@@ -14,7 +14,7 @@ class StopSignDetector:
         cascade_path = '../cascade/stop_sign_classifier.xml'
         self.stop_sign_cascade = cv2.CascadeClassifier(cascade_path)
         self.image_sub = rospy.Subscriber('/camera/image_raw', Image, self.image_callback)
-        self.image_pub = rospy.Publisher('/camera/processed_image', Image, queue_size=10)
+        self.image_pub = rospy.Publisher('/camera/processed_image', Image, queue_size=10) # we want to publish len(stop_signs)
 
     def image_callback(self, data):
         try:
