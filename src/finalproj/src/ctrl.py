@@ -1,15 +1,15 @@
 import rospy
+import math
 from std_msgs.msg import String, Bool, Float32, Float64, Float64MultiArray
 from ackermann_msgs.msg import AckermannDriveStamped
 
 class PIDController:
     def __init__(self):
-        rospy.init_node('pid_controller', anonymous=True)
-        
+        self.rate = rospy.Rate(50)  
+
         self.kp = 0.05  # tune
         self.ki = 0.01  # tune 
         self.kd = 0.1  # tune
-        
         # PID variables
         self.prev_error = 0.0
         self.integral = 0.0
@@ -32,18 +32,22 @@ class PIDController:
         
         self.current_error = 0.0
         
-        self.rate = rospy.Rate(50)  
+        self.drive_msg = AckermannDriveStamped()
+        self.drive_msg.header.frame_id = "f1tenth_control"
+        self.drive_msg.drive.speed = 0.4
+
+        self.last_steering_angle = 0.0
+        self.lane_detected = True
     
+
+    #fetch error from studentVision
     def error_callback(self, msg): 
         self.current_error = msg.data
-    
-    def get_velocity(self, steering_angle):
-        if abs(steering_angle) <= 0.1:
-            return self.max_velocity
-        elif abs(steering_angle) <= 0.2:
-            return self.mid_velocity
+        if math.isinf(msg.data):
+            self.lane_detected = False
         else:
-            return self.min_velocity
+            self.lane_detected = True
+    
 
     def run(self):
         while not rospy.is_shutdown():
@@ -56,32 +60,35 @@ class PIDController:
             if delta_time == 0:
                 delta_time = 0.0001
             
-            # PID calculations
-            error = self.current_error
-            self.integral += error * delta_time
-            derivative = (error - self.prev_error) / delta_time
-            
-            steering_angle = (self.kp * error) + (self.ki * self.integral) + (self.kd * derivative)
-            
-            steering_angle = max(-self.max_steering_angle, min(self.max_steering_angle, steering_angle))
+
+            if not self.lane_detected:
+                steering_angle = -self.last_steering_angle
+            else:
+                # PID calculations
+                error = self.current_error
+                self.integral += error * delta_time
+                derivative = (error - self.prev_error) / delta_time
+                
+                steering_angle = (self.kp * error) + (self.ki * self.integral) + (self.kd * derivative)
+                
+                steering_angle = max(-self.max_steering_angle, min(self.max_steering_angle, steering_angle))
+                self.prev_error = error
+
             
             # publish the drive message
-            drive_msg = AckermannDriveStamped()
-            drive_msg.header.stamp = current_time
-            drive_msg.header.frame_id = "f1tenth_control"
-            drive_msg.drive.steering_angle = steering_angle
-            drive_msg.drive.speed = 0.4
-            
-            self.drive_pub.publish(drive_msg)
-            
-            self.prev_error = error
+            self.last_steering_angle = steering_angle
+            self.drive_msg.header.stamp = current_time
+            self.drive_msg.drive.steering_angle = steering_angle
+            self.drive_pub.publish(self.drive_msg)
             self.prev_time = current_time
             
             self.rate.sleep()
             
 if __name__ == '__main__':
+
+    rospy.init_node('pid_controller', anonymous=True)
+    controller = PIDController()
     try:
-        controller = PIDController()
         controller.run()
     except rospy.ROSInterruptException:
         pass
