@@ -32,6 +32,7 @@ class lanenet_detector():
 
         self.pub_image = rospy.Publisher("lane_detection/annotate", Image, queue_size=1)
         self.pub_bird = rospy.Publisher("lane_detection/birdseye", Image, queue_size=1)
+        self.pub_err = rospy.Publisher("lane_detection/error", Float32, queue_size=1)
         self.left_line = Line(n=5)
         self.right_line = Line(n=5)
         self.detected = False
@@ -47,7 +48,7 @@ class lanenet_detector():
             print(e)
 
         raw_img = cv_image.copy()
-        mask_image, bird_image = self.detection(raw_img)
+        mask_image, bird_image, err = self.detection(raw_img)
 
         if mask_image is not None and bird_image is not None:
             # Convert an OpenCV image into a ROS image message
@@ -57,6 +58,8 @@ class lanenet_detector():
             # Publish image message in ROS
             self.pub_image.publish(out_img_msg)
             self.pub_bird.publish(out_bird_msg)
+        if err is not None:
+            self.pub_err.publish(err)
 
 
     def gradient_thresh(self, img, thresh_min=25, thresh_max=100):
@@ -133,7 +136,7 @@ class lanenet_detector():
 
         binaryImage = np.zeros_like(sobel)
         # binaryImage[(color==1)|(sobel==1)] = 1  # uncomment for bag 0011, 0056, 0830
-        binaryImage[(color==1)] = 1   # uncomment for GEM
+        binaryImage[(sobel==1)] = 1   # uncomment for GEM
         binaryImage = morphology.remove_small_objects(binaryImage.astype('bool'),min_size=50,connectivity=2)
 
         return binaryImage
@@ -150,13 +153,13 @@ class lanenet_detector():
         ## TODO
         #1. Visually determine 4 source points and 4 destination points
 
-        int_list = img.astype(np.uint8)
-        im = PIL.Image.fromarray(int_list * 255)
-        im = im.convert("L")
-        im.save("pre_warp.jpeg")
+        # int_list = img.astype(np.uint8)
+        # im = PIL.Image.fromarray(int_list * 255)
+        # im = im.convert("L")
+        # im.save("pre_warp.jpeg")
 
-        src = np.float32([[265, 266], [375, 266], [633, 420], [0, 420]]) # uncomment for GEM
-        dest = np.float32([[100, 0], [564, 0], [555, 479], [110, 479]])   # uncomment for GEM
+        src = np.float32([[300, 400], [600, 400], [633, 479], [200, 479]]) # uncomment for GEM
+        dest = np.float32([[100, 0], [400, 0], [400, 550], [100, 550]])   # uncomment for GEM
         # src = np.float32([[470, 250], [730, 250], [800, 360], [230, 360]])  # uncomment for bag 0011, 0056
         # dest = np.float32([[0, 0], [639, 0], [639, 479], [0, 479]])         # uncomment for bag 0011, 0056
         # src = np.float32([[500, 410], [690, 380], [1150, 719], [130, 719]]) # uncomment for bag 0830
@@ -169,10 +172,10 @@ class lanenet_detector():
         #3. Generate warped image in bird view using cv2.warpPerspective()
         warped_img = cv2.warpPerspective(np.uint8(img), M, (640, 480))
 
-        im = PIL.Image.fromarray(warped_img * 255)
-        im = im.convert("L")
-        im.save("post_warp.jpeg")
-        breakpoint()
+        # im = PIL.Image.fromarray(warped_img * 255)
+        # im = im.convert("L")
+        # im.save("post_warp.jpeg")
+        # breakpoint()
  
         return warped_img, M, Minv
 
@@ -181,7 +184,7 @@ class lanenet_detector():
 
         binary_img = self.combinedBinaryImage(img)
         img_birdeye, M, Minv = self.perspective_transform(binary_img)
-
+        err = 0
         if not self.hist:
             # Fit lane without previous result
             ret = line_fit(img_birdeye)
@@ -191,6 +194,7 @@ class lanenet_detector():
             nonzeroy = ret['nonzeroy']
             left_lane_inds = ret['left_lane_inds']
             right_lane_inds = ret['right_lane_inds']
+            err = ret['err']
 
         else:
             # Fit lane with previous result
@@ -204,6 +208,7 @@ class lanenet_detector():
                     nonzeroy = ret['nonzeroy']
                     left_lane_inds = ret['left_lane_inds']
                     right_lane_inds = ret['right_lane_inds']
+                    err = ret['err']
 
                     left_fit = self.left_line.add_fit(left_fit)
                     right_fit = self.right_line.add_fit(right_fit)
@@ -222,6 +227,7 @@ class lanenet_detector():
                     nonzeroy = ret['nonzeroy']
                     left_lane_inds = ret['left_lane_inds']
                     right_lane_inds = ret['right_lane_inds']
+                    err = ret['err']
 
                     left_fit = self.left_line.add_fit(left_fit)
                     right_fit = self.right_line.add_fit(right_fit)
@@ -238,7 +244,7 @@ class lanenet_detector():
             else:
                 print("Unable to detect lanes")
 
-            return combine_fit_img, bird_fit_img
+            return combine_fit_img, bird_fit_img, err
 
 
 if __name__ == '__main__':
