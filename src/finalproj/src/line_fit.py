@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
@@ -7,295 +8,241 @@ import pickle
 # from perspective_transform import perspective_transform
 import PIL
 
-# feel free to adjust the parameters in the code if necessary
 
 def line_fit(binary_warped):
-	"""
-	Find and fit lane lines
-	"""
-	# Assuming you have created a warped binary image called "binary_warped"
-	# Take a histogram of the bottom half of the image
-	histogram = np.sum(binary_warped[binary_warped.shape[0]//2:,:], axis=0) # count of 1s in each column
-	# Create an output image to draw on and visualize the result
-	out_img = (np.dstack((binary_warped, binary_warped, binary_warped))*255).astype('uint8')
-	# Find the peak of the left and right halves of the histogram
-	# These will be the starting point for the left and right lines
-	midpoint = int(histogram.shape[0]/2) # midpoint of entire image
-	leftx_base = np.argmax(histogram[100:midpoint]) + 100 # col with most number of 1s in left side of image
-	rightx_base = np.argmax(histogram[midpoint:-100]) + midpoint # col with most number of 1s in right side of image
-
-	# Choose the number of sliding windows
-	nwindows = 9 # number of windows the image is divided into
-	# Set height of windows
-	window_height = int(binary_warped.shape[0]/nwindows) # height of each window
-	# Identify the x and y positions of all nonzero pixels in the image
-	nonzero = binary_warped.nonzero() # array of indices of all non zero elements
-	nonzeroy = np.array(nonzero[0]) # all row indices that have a non-zero element
-	nonzerox = np.array(nonzero[1]) # all col indices that have a non-zero element
-	# Current positions to be updated for each window
-	leftx_current = leftx_base
-	rightx_current = rightx_base
-	# Set the width of the windows +/- margin
-	margin = 50
-	# Set minimum number of pixels found to recenter window
-	minpix = 50
-	# Create empty lists to receive left and right lane pixel indices
-	left_lane_inds = []
-	right_lane_inds = []
-
-	# Step through the windows one by one
-	for window in range(nwindows):
-		# Identify window boundaries in x and y (and right and left)
-		##TO DO 
-		tl_left = (max(leftx_current - margin, 0), window * window_height)
-		br_left = (min(leftx_current + margin, midpoint - margin), window_height * (window + 1) - 1)
-		tl_right = (max(rightx_current - margin, midpoint + margin), window * window_height)
-		br_right = (min(rightx_current + margin, 639), window_height * (window + 1) - 1)
-
-		####
-		# Draw the windows on the visualization image using cv2.rectangle()
-		##TO DO
-		cv2.rectangle(out_img, tl_left, br_left, (0, 255, 0), thickness=-1)
-		cv2.rectangle(out_img, tl_right, br_right, (0, 0, 255), thickness=-1)
-		####
-		# Identify the nonzero pixels in x and y within the window
-		##TO DO
-		nz_l = []
-		nz_r = []
-		for i, (x, y) in enumerate(zip(nonzerox, nonzeroy)):
-			if tl_left[0] <= x <= br_left[0] and tl_left[1] <= y <= br_left[1]:
-				nz_l.append(i)
-			if tl_right[0] <= x <= br_right[0] and tl_right[1] <= y <= br_right[1]:
-				nz_r.append(i)
-
-		####
-		# Append these indices to the lists
-		##TO DO
-		left_lane_inds.append(nz_l)
-		right_lane_inds.append(nz_r)
-
-		####
-		# If you found > minpix pixels, recenter next window on their mean position
-		##TO DO
-		if len(nz_l) > minpix:
-			nz_l = np.array(nz_l, dtype=int)
-			leftx_current = int(round(np.mean(nonzerox[nz_l])))
-
-		if len(nz_r) > minpix/2:
-			nz_r = np.array(nz_r, dtype=int)
-			rightx_current = int(round(np.mean(nonzerox[nz_r])))
-		####
-	
-	# Concatenate the arrays of indices
-	left_lane_inds = np.concatenate(left_lane_inds)
-	right_lane_inds = np.concatenate(right_lane_inds)
-
-	# Extract left and right line pixel positions
-	left_lane_inds = np.array(left_lane_inds, dtype=int)
-	right_lane_inds = np.array(right_lane_inds, dtype=int)
-
-	leftx = nonzerox[left_lane_inds]
-	lefty = nonzeroy[left_lane_inds]
-	rightx = nonzerox[right_lane_inds]
-	righty = nonzeroy[right_lane_inds]
-
-	# Fit a second order polynomial to each using np.polyfit()
-	# If there isn't a good fit, meaning any of leftx, lefty, rightx, and righty are empty,
-	# the second order polynomial is unable to be sovled.
-	# Thus, it is unable to detect edges.
-	try:
-	##TODO
-		left_fit = np.polyfit(lefty, leftx, 2)
-		right_fit = np.polyfit(righty, rightx, 2)
-	####
-	except TypeError:
-		print("Unable to detect lanes")
-		return None
+    """
+    Find and fit a single lane region
+    """
+    # Take a histogram of the bottom half of the image
+    histogram = np.sum(binary_warped[binary_warped.shape[0]//2:,:], axis=0)
+    
+    # Create output image for visualization
+    out_img = (np.dstack((binary_warped, binary_warped, binary_warped))*255).astype('uint8')
+    
+    # Find the peak of the histogram - this will be the center of the lane
+    lane_base = np.argmax(histogram)
+    
+    # Set up sliding window parameters
+    nwindows = 9
+    window_height = int(binary_warped.shape[0]/nwindows)
+    margin = 40  # Increased margin to capture wider lane region
+    minpix = 50
+    
+    # Find nonzero pixels
+    nonzero = binary_warped.nonzero()
+    nonzeroy = np.array(nonzero[0])
+    nonzerox = np.array(nonzero[1])
+    
+    # Current position to be updated for each window
+    lane_current = lane_base
+    
+    # Create empty list for lane pixel indices
+    lane_inds = []
+    
+    # Step through the windows one by one
+    for window in range(nwindows):
+        # Identify window boundaries
+        win_y_low = binary_warped.shape[0] - (window + 1) * window_height
+        win_y_high = binary_warped.shape[0] - window * window_height
+        win_x_low = max(lane_current - margin, 0)
+        win_x_high = min(lane_current + margin, binary_warped.shape[1])
+        
+        # Draw the window
+        cv2.rectangle(out_img, (win_x_low, win_y_low), 
+                     (win_x_high, win_y_high), (0, 255, 0), 2)
+        
+        # Draw center point
+        center_x = (win_x_low + win_x_high) // 2
+        cv2.circle(out_img, (center_x, (win_y_low + win_y_high) // 2), 
+                  5, (0, 0, 255), -1)
+        
+        # Identify the nonzero pixels in x and y within the window
+        good_inds = ((nonzeroy >= win_y_low) & (nonzeroy < win_y_high) & 
+                    (nonzerox >= win_x_low) & (nonzerox < win_x_high)).nonzero()[0]
+        
+        lane_inds.append(good_inds)
+        
+        # Recenter next window if enough pixels found
+        if len(good_inds) > minpix:
+            lane_current = int(np.mean(nonzerox[good_inds]))
+    
+    # Concatenate the arrays of indices
+    lane_inds = np.concatenate(lane_inds)
+    
+    # Extract lane pixel positions
+    lanex = nonzerox[lane_inds]
+    laney = nonzeroy[lane_inds]
+    
+    # Calculate error from center
+    image_center = binary_warped.shape[1] // 2
+    lane_center = lane_current
+    err = lane_center - image_center
+    
+    # Fit a second order polynomial
+    try:
+        lane_fit = np.polyfit(laney, lanex, 2)
+    except TypeError:
+        print("Unable to detect lane")
+        return None
+    
+    return {
+        'lane_fit': lane_fit,
+        'nonzerox': nonzerox,
+        'nonzeroy': nonzeroy,
+        'out_img': out_img,
+        'lane_inds': lane_inds,
+        'err': err
+    }
 
 
-	# Return a dict of relevant variables
-	ret = {}
-	ret['left_fit'] = left_fit
-	ret['right_fit'] = right_fit
-	ret['nonzerox'] = nonzerox
-	ret['nonzeroy'] = nonzeroy
-	ret['out_img'] = out_img
-	ret['left_lane_inds'] = left_lane_inds
-	ret['right_lane_inds'] = right_lane_inds
+def tune_fit(binary_warped, prev_fit):
+    """
+    Given a previously fit line, quickly try to find the lane based on previous fit
+    """
+    # Find all nonzero pixels
+    nonzero = binary_warped.nonzero()
+    nonzeroy = np.array(nonzero[0])
+    nonzerox = np.array(nonzero[1])
+    
+    # Set search margin around previous polynomial
+    margin = 40  # Increased margin for wider lane region
+    
+    # Find pixels within margin of previous fit
+    lane_inds = ((nonzerox > (prev_fit[0]*(nonzeroy**2) + 
+                             prev_fit[1]*nonzeroy + 
+                             prev_fit[2] - margin)) & 
+                 (nonzerox < (prev_fit[0]*(nonzeroy**2) + 
+                             prev_fit[1]*nonzeroy + 
+                             prev_fit[2] + margin)))
+    
+    # Extract lane pixel positions
+    lanex = nonzerox[lane_inds]
+    laney = nonzeroy[lane_inds]
+    
+    # Check if we found enough points
+    min_inds = 10
+    if laney.shape[0] < min_inds:
+        return None
+    
+    # Fit a second order polynomial
+    lane_fit = np.polyfit(laney, lanex, 2)
+    
+    # Generate points for error calculation
+    ploty = np.linspace(0, binary_warped.shape[0]-1, binary_warped.shape[0])
+    lane_fitx = lane_fit[0]*ploty**2 + lane_fit[1]*ploty + lane_fit[2]
+    
+    # Calculate error from center
+    image_center = binary_warped.shape[1] // 2
+    lane_center = lane_fitx[len(lane_fitx)//2]  # Use middle point of fit
+    err = lane_center - image_center
+    
+    return {
+        'lane_fit': lane_fit,
+        'nonzerox': nonzerox,
+        'nonzeroy': nonzeroy,
+        'lane_inds': lane_inds,
+        'err': err
+    }
 
-	return ret
-
-
-def tune_fit(binary_warped, left_fit, right_fit):
-	"""
-	Given a previously fit line, quickly try to find the line based on previous lines
-	"""
-	# Assume you now have a new warped binary image
-	# from the next frame of video (also called "binary_warped")
-	# It's now much easier to find line pixels!
-	nonzero = binary_warped.nonzero()
-	nonzeroy = np.array(nonzero[0])
-	nonzerox = np.array(nonzero[1])
-	margin = 100
-	left_lane_inds = ((nonzerox > (left_fit[0]*(nonzeroy**2) + left_fit[1]*nonzeroy + left_fit[2] - margin)) & (nonzerox < (left_fit[0]*(nonzeroy**2) + left_fit[1]*nonzeroy + left_fit[2] + margin)))
-	right_lane_inds = ((nonzerox > (right_fit[0]*(nonzeroy**2) + right_fit[1]*nonzeroy + right_fit[2] - margin)) & (nonzerox < (right_fit[0]*(nonzeroy**2) + right_fit[1]*nonzeroy + right_fit[2] + margin)))
-
-	# Again, extract left and right line pixel positions
-	leftx = nonzerox[left_lane_inds]
-	lefty = nonzeroy[left_lane_inds]
-	rightx = nonzerox[right_lane_inds]
-	righty = nonzeroy[right_lane_inds]
-
-	# If we don't find enough relevant points, return all None (this means error)
-	min_inds = 10
-	if lefty.shape[0] < min_inds or righty.shape[0] < min_inds:
-		return None
-
-	# Fit a second order polynomial to each
-	left_fit = np.polyfit(lefty, leftx, 2)
-	right_fit = np.polyfit(righty, rightx, 2)
-	# Generate x and y values for plotting
-	ploty = np.linspace(0, binary_warped.shape[0]-1, binary_warped.shape[0] )
-	left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
-	right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
-
-	# Return a dict of relevant variables
-	ret = {}
-	ret['left_fit'] = left_fit
-	ret['right_fit'] = right_fit
-	ret['nonzerox'] = nonzerox
-	ret['nonzeroy'] = nonzeroy
-	ret['left_lane_inds'] = left_lane_inds
-	ret['right_lane_inds'] = right_lane_inds
-
-	return ret
 
 
 def viz1(binary_warped, ret, save_file=None):
-	"""
-	Visualize each sliding window location and predicted lane lines, on binary warped image
-	save_file is a string representing where to save the image (if None, then just display)
-	"""
-	# Grab variables from ret dictionary
-	left_fit = ret['left_fit']
-	right_fit = ret['right_fit']
-	nonzerox = ret['nonzerox']
-	nonzeroy = ret['nonzeroy']
-	out_img = ret['out_img']
-	left_lane_inds = ret['left_lane_inds']
-	right_lane_inds = ret['right_lane_inds']
+    """
+    Visualize sliding window location and predicted lane center
+    """
+    # Grab variables from ret dictionary
+    lane_fit = ret['lane_fit']
+    nonzerox = ret['nonzerox']
+    nonzeroy = ret['nonzeroy']
+    out_img = ret['out_img']
+    lane_inds = ret['lane_inds']
 
-	# Generate x and y values for plotting
-	ploty = np.linspace(0, binary_warped.shape[0]-1, binary_warped.shape[0] )
-	left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
-	right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
+    # Generate x and y values for plotting
+    ploty = np.linspace(0, binary_warped.shape[0]-1, binary_warped.shape[0])
+    lane_fitx = lane_fit[0]*ploty**2 + lane_fit[1]*ploty + lane_fit[2]
 
-	out_img[nonzeroy[left_lane_inds], nonzerox[left_lane_inds]] = [255, 0, 0]
-	out_img[nonzeroy[right_lane_inds], nonzerox[right_lane_inds]] = [0, 0, 255]
-	plt.imshow(out_img)
-	plt.plot(left_fitx, ploty, color='yellow')
-	plt.plot(right_fitx, ploty, color='yellow')
-	plt.xlim(0, 1280)
-	plt.ylim(720, 0)
-	if save_file is None:
-		plt.show()
-	else:
-		plt.savefig(save_file)
-	plt.gcf().clear()
-
+    # Color detected lane pixels
+    out_img[nonzeroy[lane_inds], nonzerox[lane_inds]] = [0, 255, 0]
+    
+    plt.imshow(out_img)
+    plt.plot(lane_fitx, ploty, color='yellow')
+    plt.xlim(0, 1280)
+    plt.ylim(720, 0)
+    
+    if save_file is None:
+        plt.show()
+    else:
+        plt.savefig(save_file)
+    plt.gcf().clear()
 
 def bird_fit(binary_warped, ret, save_file=None):
-	"""
-	Visualize the predicted lane lines with margin, on binary warped image
-	save_file is a string representing where to save the image (if None, then just display)
-	"""
-	# Grab variables from ret dictionary
-	left_fit = ret['left_fit']
-	right_fit = ret['right_fit']
-	nonzerox = ret['nonzerox']
-	nonzeroy = ret['nonzeroy']
-	left_lane_inds = ret['left_lane_inds']
-	right_lane_inds = ret['right_lane_inds']
+    """
+    Visualize the predicted lane center with margin
+    """
+    # Grab variables
+    lane_fit = ret['lane_fit']
+    nonzerox = ret['nonzerox']
+    nonzeroy = ret['nonzeroy']
+    lane_inds = ret['lane_inds']
 
-	# Create an image to draw on and an image to show the selection window
-	out_img = (np.dstack((binary_warped, binary_warped, binary_warped))*255).astype('uint8')
-	window_img = np.zeros_like(out_img)
-	# Color in left and right line pixels
-	out_img[nonzeroy[left_lane_inds], nonzerox[left_lane_inds]] = [255, 0, 0]
-	out_img[nonzeroy[right_lane_inds], nonzerox[right_lane_inds]] = [0, 0, 255]
+    # Create output images
+    out_img = (np.dstack((binary_warped, binary_warped, binary_warped))*255).astype('uint8')
+    window_img = np.zeros_like(out_img)
+    
+    # Color detected lane pixels
+    out_img[nonzeroy[lane_inds], nonzerox[lane_inds]] = [0, 255, 0]
 
-	# Generate x and y values for plotting
-	ploty = np.linspace(0, binary_warped.shape[0]-1, binary_warped.shape[0])
-	left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
-	right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
+    # Generate x and y values for plotting
+    ploty = np.linspace(0, binary_warped.shape[0]-1, binary_warped.shape[0])
+    lane_fitx = lane_fit[0]*ploty**2 + lane_fit[1]*ploty + lane_fit[2]
 
-	# added check if rightx crosses midpoint (uncomment only for bag 0830)
-	# right_fitx = np.where((right_fitx <= 320), right_fitx + 400, right_fitx)
+    # Generate polygon for search window
+    margin = 40
+    lane_window1 = np.array([np.transpose(np.vstack([lane_fitx-margin, ploty]))])
+    lane_window2 = np.array([np.flipud(np.transpose(np.vstack([lane_fitx+margin, ploty])))])
+    lane_pts = np.hstack((lane_window1, lane_window2))
 
-	# Generate a polygon to illustrate the search window area
-	# And recast the x and y points into usable format for cv2.fillPoly()
-	margin = 100  # NOTE: Keep this in sync with *_fit()
-	left_line_window1 = np.array([np.transpose(np.vstack([left_fitx-margin, ploty]))])
-	left_line_window2 = np.array([np.flipud(np.transpose(np.vstack([left_fitx+margin, ploty])))])
-	left_line_pts = np.hstack((left_line_window1, left_line_window2))
-	right_line_window1 = np.array([np.transpose(np.vstack([right_fitx-margin, ploty]))])
-	right_line_window2 = np.array([np.flipud(np.transpose(np.vstack([right_fitx+margin, ploty])))])
-	right_line_pts = np.hstack((right_line_window1, right_line_window2))
+    # Draw the lane
+    cv2.fillPoly(window_img, np.int_([lane_pts]), (0,255, 0))
+    
+    # Draw center points and error line
+    image_center = 320
+    lane_center = int(lane_fitx[len(lane_fitx)//2])
+    cv2.circle(out_img, (image_center, 240), 5, (0, 255, 0), thickness=-1)
+    cv2.circle(out_img, (lane_center, 240), 5, (0, 0, 255), thickness=-1)
+    cv2.line(out_img, (image_center, 240), (lane_center, 240), (255, 0, 0), thickness=2)
+    
+    result = cv2.addWeighted(out_img, 1, window_img, 0.3, 0)
+    plt.plot(lane_fitx, ploty, color='yellow')
+    plt.xlim(0, 1280)
+    plt.ylim(720, 0)
 
-	# Draw the lane onto the warped blank image
-	cv2.fillPoly(window_img, np.int_([left_line_pts]), (0,255, 0))
-	cv2.fillPoly(window_img, np.int_([right_line_pts]), (0,255, 0))
-	result = cv2.addWeighted(out_img, 1, window_img, 0.3, 0)
+    return result
 
-	# plt.imshow(result)
-	plt.plot(left_fitx, ploty, color='yellow')
-	plt.plot(right_fitx, ploty, color='yellow')
-	plt.xlim(0, 1280)
-	plt.ylim(720, 0)
+def final_viz(undist, lane_fit, m_inv):
+    """
+    Final lane prediction visualized and overlayed on original image
+    """
+    ploty = np.linspace(0, undist.shape[0]-1, undist.shape[0])
+    lane_fitx = lane_fit[0]*ploty**2 + lane_fit[1]*ploty + lane_fit[2]
 
-	# cv2.imshow('bird',result)
-	# cv2.imwrite('bird_from_cv2.png', result)
+    color_warp = np.zeros((720, 1280, 3), dtype='uint8')
 
-	# if save_file is None:
-	# 	plt.show()
-	# else:
-	# 	plt.savefig(save_file)
-	# plt.gcf().clear()
+    # Create polygon points for the lane region
+    margin = 40
+    pts_left = np.array([np.transpose(np.vstack([lane_fitx-margin, ploty]))])
+    pts_right = np.array([np.flipud(np.transpose(np.vstack([lane_fitx+margin, ploty])))])
+    pts = np.hstack((pts_left, pts_right))
 
-	return result
+    # Draw lane region
+    cv2.fillPoly(color_warp, np.int_([pts]), (0,255, 0))
 
+    # Warp back to original image space
+    newwarp = cv2.warpPerspective(color_warp, m_inv, (undist.shape[1], undist.shape[0]))
+    
+    # Combine images
+    undist = np.array(undist, dtype=np.uint8)
+    newwarp = np.array(newwarp, dtype=np.uint8)
+    result = cv2.addWeighted(undist, 1, newwarp, 0.3, 0)
 
-def final_viz(undist, left_fit, right_fit, m_inv):
-	"""
-	Final lane line prediction visualized and overlayed on top of original image
-	"""
-	# Generate x and y values for plotting
-	ploty = np.linspace(0, undist.shape[0]-1, undist.shape[0])
-	left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
-	right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
-
-	# added check if rightx crosses midpoint (uncomment only for bag 0830)
-	# right_fitx = np.where((right_fitx <= 320), right_fitx + 400, right_fitx)
-
-	# Create an image to draw the lines on
-	#warp_zero = np.zeros_like(warped).astype(np.uint8)
-	#color_warp = np.dstack((warp_zero, warp_zero, warp_zero))
-	color_warp = np.zeros((720, 1280, 3), dtype='uint8')  # NOTE: Hard-coded image dimensions
-
-	# Recast the x and y points into usable format for cv2.fillPoly()
-	pts_left = np.array([np.transpose(np.vstack([left_fitx, ploty]))])
-	pts_right = np.array([np.flipud(np.transpose(np.vstack([right_fitx, ploty])))])
-	pts = np.hstack((pts_left, pts_right))
-
-	# Draw the lane onto the warped blank image
-	cv2.fillPoly(color_warp, np.int_([pts]), (0,255, 0))
-
-	# Warp the blank back to original image space using inverse perspective matrix (Minv)
-	newwarp = cv2.warpPerspective(color_warp, m_inv, (undist.shape[1], undist.shape[0]))
-	# Combine the result with the original image
-	# Convert arrays to 8 bit for later cv to ros image transfer
-	undist = np.array(undist, dtype=np.uint8)
-	newwarp = np.array(newwarp, dtype=np.uint8)
-	result = cv2.addWeighted(undist, 1, newwarp, 0.3, 0)
-
-	return result
+    return result
