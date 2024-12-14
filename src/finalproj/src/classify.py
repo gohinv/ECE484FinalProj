@@ -8,8 +8,6 @@ from sensor_msgs.msg import Image
 from std_msgs.msg import Float32
 
 
-### NOT TESTED
-
 class StopSignDetector:
     def __init__(self):
         self.bridge = CvBridge()
